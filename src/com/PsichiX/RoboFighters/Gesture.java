@@ -50,19 +50,19 @@ public class Gesture
 		return _instances.containsKey(id);
 	}
 	
-	public void start(int id, int x, int y)
+	public void validateOnPath(int id)
 	{
-		if((_max < 0 || _instances.size() < _max) && !_instances.containsKey(id))
-			_instances.put(id, new Instance(x, y));
-	}
-	
-	/*public void validateOnMove()
-	{
-		if(_instances.size() <= 0)
+		if(!_instances.containsKey(id))
 			return;
-		if(_instances.size() == 1)
-			
-	}*/
+		Instance inst = _instances.get(id);
+		ArrayList<int[]> src = inst.get();
+		if(src.size() <= 0)
+			return;
+		ArrayList<int[]> dst = new ArrayList<int[]>();
+		for(int i = 0; i < src.size(); i++)
+			dst.add(src.get(i));
+		_rcv.queueCommand(this, "MovementPath", new MovementPath(id, inst.getStartX(), inst.getStartY(), dst));
+	}
 	
 	public void validateOnGrid(int id)
 	{
@@ -79,6 +79,22 @@ public class Gesture
 					_rcv.queueCommand(this, "ValidGridPattern", new String(en.getKey()));
 			}
 		}
+	}
+	
+	public void start(int id, int x, int y)
+	{
+		if((_max < 0 || _instances.size() < _max) && !_instances.containsKey(id))
+			_instances.put(id, new Instance(x, y));
+	}
+	
+	public void moveTo(int id, int x, int y)
+	{
+		if(!_instances.containsKey(id))
+			return;
+		int[] pos = _instances.get(id).getLast(); 
+		if(pos != null && x == pos[0] && y == pos[1])
+			return;
+		_instances.get(id).add(x, y);
 	}
 	
 	public void stop(int id)
@@ -105,13 +121,6 @@ public class Gesture
 			i.truncate();
 	}
 	
-	public void moveTo(int id, int x, int y)
-	{
-		if(!_instances.containsKey(id))
-			return;
-		_instances.get(id).add(x, y);
-	}
-	
 	private class Instance
 	{
 		private ArrayList<int[]> _pos = new ArrayList<int[]>();
@@ -128,7 +137,7 @@ public class Gesture
 		{
 			if(_pos.size() <= 1)
 				return;
-			int[] t = _pos.get(0);
+			int[] t = _pos.get(_pos.size() - 1);
 			_pos.clear();
 			_pos.add(t);
 		}
@@ -152,6 +161,47 @@ public class Gesture
 		{
 			return _startY;
 		}
+		
+		public int[] getLast()
+		{
+			return _pos.size() > 0 ? _pos.get(_pos.size() - 1) : null;
+		}
+	}
+	
+	public class MovementPath
+	{
+		private int _id = -1;
+		private ArrayList<int[]> _path;
+		private int _startX = 0;
+		private int _startY = 0;
+		
+		protected MovementPath(int id, int startX, int startY, ArrayList<int[]> path)
+		{
+			_id = id;
+			_startX = startX;
+			_startY = startY;
+			_path = path;
+		}
+		
+		public int getId()
+		{
+			return _id;
+		}
+		
+		public int getStartX()
+		{
+			return _startX;
+		}
+		
+		public int getStartY()
+		{
+			return _startY;
+		}
+		
+		public ArrayList<int[]> getPath()
+		{
+			return _path;
+		}
 	}
 	
 	public class GridPattern
@@ -163,22 +213,17 @@ public class Gesture
 			if(_pos.size() == 0 || moves == null)
 				return false;
 			int step = 0;
-			int lx = 0;
-			int ly = 0;
+			int[] pos = null;
 			for(int[] p : moves)
 			{
 				int x = p[0] - sx;
 				int y = p[1] - sy;
-				if(x != lx || y != ly)
+				pos = _pos.get(step);
+				if(x == pos[0] && y == pos[1])
 				{
-					if(x == _pos.get(step)[0] && y == _pos.get(step)[1])
-					{
-						step++;
-						if(step >= _pos.size())
-							return true;
-					}
-					lx = x;
-					ly = y;
+					step++;
+					if(step >= _pos.size())
+						return true;
 				}
 			}
 			return false;
