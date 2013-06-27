@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<Material
+   effect="raw/color_shader"
+   blendMode="false"
+   blendingSource="SRC_ALPHA"
+   blendingDestination="ONE_MINUS_SRC_ALPHA"
+   >
+   <Samplers>
+      <Sampler0
+         name="uSamp"
+         image="drawable/logo"
+         filteringMin="LINEAR"
+         filteringMag="LINEAR"
+         wrappingVertical="REPEAT"
+         wrappingHorizontal="REPEAT"
+         />
+   </Samplers>
+</Material>
