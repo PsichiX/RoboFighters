@@ -1,8 +1,10 @@
 package com.PsichiX.RoboFighters;
 
+import java.io.ByteArrayOutputStream;
+
 public interface BroadcastManagerInterface
 {
-	public abstract void destroy();
-	public abstract void sendBroadcast(byte[] data);
-	public abstract byte[] receiveBroadcast(int bufflength);
+	public void destroy();
+	public void sendMessage(byte[] data);
+	public void sendMessage(ByteArrayOutputStream stream);
 }

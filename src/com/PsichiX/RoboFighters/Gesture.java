@@ -61,7 +61,7 @@ public class Gesture
 		ArrayList<int[]> dst = new ArrayList<int[]>();
 		for(int i = 0; i < src.size(); i++)
 			dst.add(src.get(i));
-		_rcv.queueCommand(this, "MovementPath", new MovementPath(id, inst.getStartX(), inst.getStartY(), dst));
+		_rcv.queueCommand(this, "MovementPath", new MovementPath(id, inst.getStartX(), inst.getStartY(), dst, inst.getUserData()));
 	}
 	
 	public void validateOnGrid(int id)
@@ -83,8 +83,13 @@ public class Gesture
 	
 	public void start(int id, int x, int y)
 	{
+		start(id, x, y, null);
+	}
+	
+	public void start(int id, int x, int y, Object userData)
+	{
 		if((_max < 0 || _instances.size() < _max) && !_instances.containsKey(id))
-			_instances.put(id, new Instance(x, y));
+			_instances.put(id, new Instance(x, y, userData));
 	}
 	
 	public void moveTo(int id, int x, int y)
@@ -126,11 +131,13 @@ public class Gesture
 		private ArrayList<int[]> _pos = new ArrayList<int[]>();
 		private int _startX = 0;
 		private int _startY = 0;
+		private Object _userData;
 		
-		public Instance(int x, int y)
+		public Instance(int x, int y, Object userData)
 		{
 			_startX = x;
 			_startY = y;
+			_userData = userData;
 		}
 		
 		public void truncate()
@@ -166,6 +173,11 @@ public class Gesture
 		{
 			return _pos.size() > 0 ? _pos.get(_pos.size() - 1) : null;
 		}
+		
+		public Object getUserData()
+		{
+			return _userData;
+		}
 	}
 	
 	public class MovementPath
@@ -174,13 +186,15 @@ public class Gesture
 		private ArrayList<int[]> _path;
 		private int _startX = 0;
 		private int _startY = 0;
+		private Object _userData;
 		
-		protected MovementPath(int id, int startX, int startY, ArrayList<int[]> path)
+		protected MovementPath(int id, int startX, int startY, ArrayList<int[]> path, Object userData)
 		{
 			_id = id;
 			_startX = startX;
 			_startY = startY;
 			_path = path;
+			_userData = userData;
 		}
 		
 		public int getId()
@@ -201,6 +215,11 @@ public class Gesture
 		public ArrayList<int[]> getPath()
 		{
 			return _path;
+		}
+		
+		public Object getUserData()
+		{
+			return _userData;
 		}
 	}
 	

@@ -1,12 +1,13 @@
 package com.PsichiX.RoboFighters;
 
+import com.PsichiX.XenonCoreDroid.XeUtils.*;
+
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.SocketException;
-import java.util.LinkedList;
+import java.io.ByteArrayOutputStream;
 
 import android.content.Context;
 import android.net.DhcpInfo;
@@ -16,18 +17,14 @@ import android.util.Log;
 
 public class UDPBroadCastManager implements BroadcastManagerInterface
 {
-	public static interface ChainedReceiver
-	{
-		public void onMessageReceived(byte[] msg);
-	}
-
 	private static final String TAG = UDPBroadCastManager.class.getName();
 	private static int PORT = 14444;
 
 	private DatagramSocket _socket;
-	private Context _context;
-	private LinkedList<ChainedReceiver> _chainedReceiverList = new LinkedList<ChainedReceiver>();
-
+	private final Context _context;
+	private ReceivingThread _threadReceiving;
+	private final InetAddress _address;
+	
 	public UDPBroadCastManager(Context context)
 	{
 		_context = context;
@@ -36,12 +33,23 @@ public class UDPBroadCastManager implements BroadcastManagerInterface
 			Log.v(TAG, "Opening datagram socket");
 			_socket = new DatagramSocket(PORT);
 			_socket.setSoTimeout(200);
+			_address = getBroadcastAddress(_context);
 		}
-		catch (SocketException e)
+		catch (Exception e)
 		{
 			Log.e(TAG, e.getMessage(), e);
 			throw new RuntimeException(e);
 		}
+	}
+	
+	protected void finalize() throws Throwable
+	{
+		release();
+	}
+	
+	public void release()
+	{
+		stop();
 	}
 
 	private static InetAddress getBroadcastAddress(Context context) throws IOException
@@ -58,10 +66,40 @@ public class UDPBroadCastManager implements BroadcastManagerInterface
 			quads[k] = (byte) ((broadcast >> k * 8) & 0xFF);
 		return InetAddress.getByAddress(quads);
 	}
-
-	/*public void sendBroadcast(byte[] data)
+	
+	public void sendMessage(byte[] data)
 	{
-		final Context fcontext = _context;
+//		if(_threadSending != null)
+//			_threadSending.sendMessage(data);
+		sendBroadcastBuffer(data);
+	}
+	
+	public void sendMessage(ByteArrayOutputStream stream)
+	{
+//		if(_threadSending != null)
+//			_threadSending.sendMessage(stream);
+		sendBroadcastStream(stream);
+	}
+	
+	private void sendBroadcastStream(ByteArrayOutputStream stream)
+	{
+		if(stream != null)
+			sendBroadcastBuffer(stream.toByteArray());
+	}
+	
+	private void sendBroadcastBuffer(byte[] data)
+	{
+//		try
+//		{
+//			_socket.setBroadcast(true);
+//			// TODO: is better to get broadcast address somewhere else
+//			DatagramPacket packet = new DatagramPacket(data, data.length, getBroadcastAddress(_context), PORT);
+//			_socket.send(packet);
+//		}
+//		catch (IOException e)
+//		{
+//			Log.e(TAG, e.getMessage(), e);
+//		}
 		final byte[] fdata = data;
 		new Thread()
 		{
@@ -71,33 +109,29 @@ public class UDPBroadCastManager implements BroadcastManagerInterface
 				{
 					_socket.setBroadcast(true);
 					// TODO: is better to get broadcast address somewhere else
-					DatagramPacket packet = new DatagramPacket(fdata, fdata.length, getBroadcastAddress(fcontext), PORT);
+					DatagramPacket packet = new DatagramPacket(fdata, fdata.length, _address, PORT);
 					_socket.send(packet);
 				}
-				catch (IOException e)
+				catch (Exception e)
 				{
 					Log.e(TAG, e.getMessage(), e);
 				}
 			}
 		}.start();
-	}*/
-	
-	public void sendBroadcast(byte[] data)
-	{
-		try
-		{
-			_socket.setBroadcast(true);
-			// TODO: is better to get broadcast address somewhere else
-			DatagramPacket packet = new DatagramPacket(data, data.length, getBroadcastAddress(_context), PORT);
-			_socket.send(packet);
-		}
-		catch (IOException e)
-		{
-			Log.e(TAG, e.getMessage(), e);
-		}
 	}
-
-	public byte[] receiveBroadcast(int bufflength)
+	
+//	private ByteArrayInputStream receiveBroadcastStream(int bufflength)
+//	{
+//		byte[] b = receiveBroadcastBuffer(bufflength, false);
+//		if(b != null)
+//		{
+//			ByteArrayInputStream s = new ByteArrayInputStream(b);
+//			return s;
+//		}
+//		return null;
+//	}
+	
+	private byte[] receiveBroadcastBuffer(int bufflength)
 	{
 		bufflength = Math.max(0, bufflength);
 		byte[] buf = new byte[bufflength];
@@ -119,8 +153,6 @@ public class UDPBroadCastManager implements BroadcastManagerInterface
 		byte [] newArray = new byte[len];
 		byte [] oldArray = packet.getData();
 		System.arraycopy(oldArray, 0, newArray, 0, len);
-		for (ChainedReceiver receiver : _chainedReceiverList)
-			receiver.onMessageReceived(newArray);
 		return newArray;
 	}
 
@@ -128,16 +160,67 @@ public class UDPBroadCastManager implements BroadcastManagerInterface
 	{
 		_socket.close();
 	}
-
-	public void addChainedReceiver(ChainedReceiver receiver)
+	
+	public void onCommand(Object sender, String cmd, Object data)
 	{
-		if(!_chainedReceiverList.contains(receiver))
-			_chainedReceiverList.add(receiver);
+		if(sender == this)
+		{
+			if(cmd.equals("SendBuffer") && data instanceof byte[])
+				sendBroadcastBuffer((byte[])data);
+			else if(cmd.equals("SendStream") && data instanceof ByteArrayOutputStream)
+				sendBroadcastStream((ByteArrayOutputStream)data);
+		}
 	}
 	
-	public void removeChainedReceiver(ChainedReceiver receiver)
+	public void start(CommandQueue rcv, long receivingInterval)
 	{
-		if(_chainedReceiverList.contains(receiver))
-			_chainedReceiverList.remove(receiver);
+		stop();
+		_threadReceiving = new ReceivingThread(this, rcv, receivingInterval);
+		_threadReceiving.start();
+	}
+	
+	public void stop()
+	{
+		if(_threadReceiving != null)
+			_threadReceiving.die();
+	}
+	
+	private class ReceivingThread extends Thread
+	{
+		private volatile boolean _running = false;
+		private final UDPBroadCastManager _owner;
+		private final CommandQueue _receiver;
+		private final long _interval;
+		
+		public ReceivingThread(UDPBroadCastManager o, CommandQueue rcv, long interval)
+		{
+			super();
+			_owner = o;
+			_receiver = rcv;
+			_interval = interval;
+		}
+		
+		public void run()
+		{
+			_running = true;
+			while(_running)
+			{
+				byte[] b = _owner.receiveBroadcastBuffer(1024);
+				_receiver.queueCommand(_owner, "ReceiveBuffer", b);
+				if(_interval > 0)
+				{
+					try {
+						Thread.sleep(_interval);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		}
+		
+		public void die()
+		{
+			_running = false;
+		}
 	}
 }

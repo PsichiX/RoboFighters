@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <Camera2D
    aspect="SCREEN"
-   zoomOut="200"
+   zoomOut="1000"
    x="0"
    y="0"
    angle="0"
